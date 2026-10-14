@@ -158,8 +158,7 @@ button {
 .setup-panel[hidden],
 .legacy-notice[hidden],
 .stepper[hidden],
-.read-only-label[hidden],
-.delete-button[hidden] {
+.read-only-label[hidden] {
   display: none;
 }
 
@@ -355,8 +354,7 @@ p {
 
 .primary-button:active,
 .secondary-button:active,
-.stepper-button:active,
-.icon-button:active {
+.stepper-button:active {
   transform: translateY(1px);
 }
 
@@ -465,25 +463,6 @@ p {
 .expiry-label {
   color: var(--muted);
   font-size: 12px;
-}
-
-.icon-button {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: #738083;
-  background: transparent;
-  font-size: 24px;
-  line-height: 1;
-}
-
-.icon-button:hover {
-  border-color: #efcfcb;
-  color: var(--danger);
-  background: #fff5f3;
 }
 
 .trip-card__body {

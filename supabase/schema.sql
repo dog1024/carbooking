@@ -11,7 +11,8 @@ create table if not exists public.trips (
   capacity smallint not null check (capacity between 1 and 99),
   remaining_seats smallint not null check (remaining_seats between 0 and capacity),
   contact text not null check (char_length(btrim(contact)) between 1 and 60),
-  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  owner_id uuid not null default auth.uid(),
+  status text not null default 'active' check (status in ('active', 'expired')),
   created_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '7 days'),
   constraint trips_retention_check check (
@@ -24,6 +25,8 @@ create table if not exists public.trips (
 alter table public.trips add column if not exists origin text;
 alter table public.trips add column if not exists waypoints text;
 alter table public.trips add column if not exists destination text;
+alter table public.trips add column if not exists status text not null default 'active';
+alter table public.trips drop constraint if exists trips_owner_id_fkey;
 
 do $$
 begin
@@ -55,8 +58,24 @@ exception
 end
 $$;
 
+do $$
+begin
+  alter table public.trips
+    add constraint trips_status_check
+    check (status in ('active', 'expired'));
+exception
+  when duplicate_object then null;
+end
+$$;
+
+update public.trips
+set status = 'expired'
+where expires_at <= now()
+  and status = 'active';
+
 create index if not exists trips_travel_date_idx on public.trips (travel_date desc);
 create index if not exists trips_expires_at_idx on public.trips (expires_at);
+create index if not exists trips_status_expires_at_idx on public.trips (status, expires_at);
 
 alter table public.trips enable row level security;
 
@@ -64,7 +83,7 @@ drop policy if exists "active trips are publicly readable" on public.trips;
 create policy "active trips are publicly readable"
 on public.trips for select
 to authenticated
-using (expires_at > now());
+using (status = 'active' and expires_at > now());
 
 drop policy if exists "users can create their own trips" on public.trips;
 create policy "users can create their own trips"
@@ -74,6 +93,7 @@ with check (
   auth.uid() = owner_id
   and char_length(btrim(origin)) between 1 and 80
   and char_length(btrim(destination)) between 1 and 80
+  and status = 'active'
   and expires_at = created_at + interval '7 days'
   and created_at >= now() - interval '7 days'
   and created_at <= now() + interval '5 minutes'
@@ -83,14 +103,10 @@ drop policy if exists "owners can update active trips" on public.trips;
 create policy "owners can update active trips"
 on public.trips for update
 to authenticated
-using (auth.uid() = owner_id and expires_at > now())
-with check (auth.uid() = owner_id and expires_at > now());
+using (auth.uid() = owner_id and status = 'active' and expires_at > now())
+with check (auth.uid() = owner_id and status = 'active' and expires_at > now());
 
 drop policy if exists "owners can delete their trips" on public.trips;
-create policy "owners can delete their trips"
-on public.trips for delete
-to authenticated
-using (auth.uid() = owner_id);
 
 revoke all on table public.trips from anon, authenticated;
 grant select on table public.trips to authenticated;
@@ -108,7 +124,7 @@ grant insert (
   expires_at
 ) on table public.trips to authenticated;
 grant update (remaining_seats) on table public.trips to authenticated;
-grant delete on table public.trips to authenticated;
+revoke delete on table public.trips from authenticated;
 
 do $$
 begin
@@ -122,19 +138,18 @@ do $$
 declare
   existing_job_id bigint;
 begin
-  select jobid into existing_job_id
-  from cron.job
-  where jobname = 'delete-expired-carpool-trips'
-  limit 1;
-
-  if existing_job_id is not null then
+  for existing_job_id in
+    select jobid
+    from cron.job
+    where jobname in ('delete-expired-carpool-trips', 'expire-carpool-trips')
+  loop
     perform cron.unschedule(existing_job_id);
-  end if;
+  end loop;
 
   perform cron.schedule(
-    'delete-expired-carpool-trips',
-    '0 * * * *',
-    'delete from public.trips where expires_at <= now()'
+    'expire-carpool-trips',
+    '* * * * *',
+    $command$update public.trips set status = 'expired' where status = 'active' and expires_at <= now()$command$
   );
 end
 $$;

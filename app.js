@@ -329,8 +329,8 @@ function formatDateParts(isoDate) {
 function formatExpiry(expiresAt) {
   const remainingHours = Math.max(1, Math.ceil((Date.parse(expiresAt) - Date.now()) / (60 * 60 * 1000)));
   return remainingHours < 24
-    ? `${remainingHours} 小时后清理`
-    : `${Math.ceil(remainingHours / 24)} 天后清理`;
+    ? `${remainingHours} 小时后隐藏`
+    : `${Math.ceil(remainingHours / 24)} 天后隐藏`;
 }
 
 function contactHref(contact) {
@@ -360,7 +360,6 @@ function renderTrips() {
     const contactLink = card.querySelector(".contact-value");
     const decreaseButton = card.querySelector(".decrease-button");
     const increaseButton = card.querySelector(".increase-button");
-    const deleteButton = card.querySelector(".delete-button");
     const stepper = card.querySelector(".stepper");
     const readOnlyLabel = card.querySelector(".read-only-label");
     const isOwner = trip.ownerId === currentUserId;
@@ -391,7 +390,6 @@ function renderTrips() {
     } else {
       stepper.hidden = true;
       readOnlyLabel.hidden = false;
-      deleteButton.hidden = true;
     }
     fragment.append(card);
   });
@@ -506,7 +504,7 @@ async function handleSubmit(event) {
     form.reset();
     setDefaultTravelDate();
     form.elements.driverName.focus();
-    showToast("行程已共享，将在 7 天后自动清理");
+    showToast("行程已共享，将在 7 天后自动隐藏");
   } catch (error) {
     console.error("添加共享行程失败：", error);
     showFormError(`添加失败：${friendlyError(error)}`);
@@ -540,23 +538,6 @@ async function updateRemainingSeats(id, difference) {
   }
 }
 
-async function deleteTrip(id) {
-  const trip = trips.find((item) => item.id === id);
-  if (!trip || trip.ownerId !== currentUserId) return;
-  if (!window.confirm(`确定删除“${trip.driverName}”的这条行程吗？`)) return;
-
-  try {
-    const { error } = await client.from("trips").delete().eq("id", id).eq("owner_id", currentUserId);
-    if (error) throw error;
-    trips = trips.filter((item) => item.id !== id);
-    renderTrips();
-    showToast("共享行程已删除");
-  } catch (error) {
-    console.error("删除共享行程失败：", error);
-    showToast(`删除失败：${friendlyError(error)}`);
-  }
-}
-
 function handleListClick(event) {
   const card = event.target.closest(".trip-card");
   if (!card) return;
@@ -564,8 +545,6 @@ function handleListClick(event) {
     updateRemainingSeats(card.dataset.id, -1);
   } else if (event.target.closest(".increase-button")) {
     updateRemainingSeats(card.dataset.id, 1);
-  } else if (event.target.closest(".delete-button")) {
-    deleteTrip(card.dataset.id);
   }
 }
 
