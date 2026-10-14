@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#173b3f" />
+    <meta
+      name="description"
+      content="记录司机出行日期、可载人数、剩余座位和联系方式的出行信息板。"
+    />
+    <title>顺风车出行板</title>
+    <link rel="preconnect" href="https://images.unsplash.com" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="config.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="masthead__shade"></div>
+      <div class="masthead__content page-shell">
+        <div>
+          <p class="eyebrow">CARPOOL BOARD</p>
+          <h1>顺风车出行板</h1>
+        </div>
+        <div id="sync-status" class="storage-badge is-loading" title="正在连接共享数据库">
+          <span class="storage-badge__dot" aria-hidden="true"></span>
+          <span id="sync-status-text">正在连接</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-shell workspace">
+      <section id="setup-panel" class="setup-panel" aria-labelledby="setup-title" hidden>
+        <div>
+          <p class="section-kicker">需要配置</p>
+          <h2 id="setup-title">连接共享数据库</h2>
+          <p id="setup-message">在 config.js 中填写 Supabase 项目地址与公开密钥。</p>
+        </div>
+        <a class="secondary-button" href="README.md" target="_blank" rel="noopener">查看配置步骤</a>
+      </section>
+
+      <div id="legacy-notice" class="legacy-notice" hidden>
+        <span id="legacy-message"></span>
+        <button id="migrate-button" class="secondary-button" type="button">发布到共享列表</button>
+      </div>
+
+      <section class="entry-panel" aria-labelledby="form-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">新增记录</p>
+            <h2 id="form-title">登记司机行程</h2>
+          </div>
+          <button class="text-button" id="reset-form" type="button">清空</button>
+        </div>
+
+        <form id="trip-form" novalidate>
+          <div class="form-grid">
+            <label class="field">
+              <span>司机称呼</span>
+              <input
+                id="driver-name"
+                name="driverName"
+                type="text"
+                maxlength="30"
+                autocomplete="name"
+                placeholder="例如：王师傅"
+                required
+              />
+            </label>
+
+            <label class="field field--wide">
+              <span>出行日期与时间</span>
+              <input id="travel-date" name="travelDate" type="datetime-local" required />
+            </label>
+
+            <label class="field">
+              <span>出发地</span>
+              <input
+                id="origin"
+                name="origin"
+                type="text"
+                maxlength="80"
+                placeholder="例如：市民广场"
+                required
+              />
+            </label>
+
+            <label class="field">
+              <span>终点</span>
+              <input
+                id="destination"
+                name="destination"
+                type="text"
+                maxlength="80"
+                placeholder="例如：高铁站"
+                required
+              />
+            </label>
+
+            <label class="field field--wide">
+              <span>途经地点 <small>选填</small></span>
+              <input
+                id="waypoints"
+                name="waypoints"
+                type="text"
+                maxlength="160"
+                placeholder="多个地点可用逗号分隔"
+              />
+            </label>
+
+            <label class="field">
+              <span>可载人数</span>
+              <input
+                id="capacity"
+                name="capacity"
+                type="number"
+                min="1"
+                max="99"
+                inputmode="numeric"
+                placeholder="4"
+                required
+              />
+            </label>
+
+            <label class="field">
+              <span>剩余可载人数</span>
+              <input
+                id="remaining-seats"
+                name="remainingSeats"
+                type="number"
+                min="0"
+                max="99"
+                inputmode="numeric"
+                placeholder="4"
+                required
+              />
+            </label>
+
+            <label class="field field--contact">
+              <span>联系方式</span>
+              <input
+                id="contact"
+                name="contact"
+                type="text"
+                maxlength="60"
+                autocomplete="tel"
+                placeholder="手机号或微信号"
+                required
+              />
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <p id="form-error" class="form-error" role="alert" aria-live="polite"></p>
+            <button id="submit-button" class="primary-button" type="submit">
+              <span aria-hidden="true">＋</span>
+              添加行程
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="records-section" aria-labelledby="records-title">
+        <div class="records-toolbar">
+          <div>
+            <p class="section-kicker">行程列表</p>
+            <div class="records-title-row">
+              <h2 id="records-title">司机出行信息</h2>
+              <span id="record-count" class="record-count">0 条</span>
+            </div>
+          </div>
+
+          <div class="backup-actions" aria-label="备份操作">
+            <button id="import-button" class="secondary-button" type="button" title="导入 properties 备份">
+              <span aria-hidden="true">↥</span>
+              导入
+            </button>
+            <button id="export-button" class="secondary-button" type="button" title="导出 properties 备份">
+              <span aria-hidden="true">↧</span>
+              导出
+            </button>
+            <input id="import-file" type="file" accept=".properties,text/plain" hidden />
+          </div>
+        </div>
+
+        <div id="trip-list" class="trip-list" aria-live="polite"></div>
+
+        <div id="empty-state" class="empty-state">
+          <div class="empty-state__icon" aria-hidden="true">+</div>
+          <h3 id="empty-title">正在连接</h3>
+          <p id="empty-message">正在读取共享行程。</p>
+        </div>
+      </section>
+    </main>
+
+    <template id="trip-card-template">
+      <article class="trip-card">
+        <div class="trip-card__topline">
+          <div class="date-block">
+            <span class="date-block__day"></span>
+            <div>
+              <p class="date-block__month"></p>
+              <p class="date-block__time"></p>
+            </div>
+          </div>
+          <div class="card-actions">
+            <span class="ownership-label"></span>
+            <span class="expiry-label"></span>
+            <button class="icon-button delete-button" type="button" title="删除行程" aria-label="删除行程">×</button>
+          </div>
+        </div>
+
+        <div class="trip-card__body">
+          <div>
+            <p class="card-label">司机</p>
+            <h3 class="driver-name"></h3>
+          </div>
+          <div>
+            <p class="card-label">联系方式</p>
+            <a class="contact-value"></a>
+          </div>
+        </div>
+
+        <div class="route-block" aria-label="行程路线">
+          <div class="route-stop route-stop--origin">
+            <span class="route-marker" aria-hidden="true"></span>
+            <div>
+              <p class="card-label">出发地</p>
+              <p class="route-value origin-value"></p>
+            </div>
+          </div>
+          <div class="route-stop route-stop--waypoints">
+            <span class="route-marker" aria-hidden="true"></span>
+            <div>
+              <p class="card-label">途经</p>
+              <p class="route-value waypoints-value"></p>
+            </div>
+          </div>
+          <div class="route-stop route-stop--destination">
+            <span class="route-marker" aria-hidden="true"></span>
+            <div>
+              <p class="card-label">终点</p>
+              <p class="route-value destination-value"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="seat-control">
+          <div>
+            <p class="card-label">剩余座位</p>
+            <p class="seat-summary"><strong class="remaining-value"></strong><span class="capacity-value"></span></p>
+          </div>
+          <div class="stepper" aria-label="调整剩余座位">
+            <button class="stepper-button decrease-button" type="button" title="减少一个座位" aria-label="减少一个座位">−</button>
+            <span class="stepper-value" aria-live="polite"></span>
+            <button class="stepper-button increase-button" type="button" title="增加一个座位" aria-label="增加一个座位">＋</button>
+          </div>
+          <span class="read-only-label" hidden>仅发布者可调整</span>
+        </div>
+      </article>
+    </template>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
