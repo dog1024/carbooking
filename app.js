@@ -2,7 +2,6 @@
 
 const LEGACY_STORAGE_KEY = "carpool-board.trips.v1";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_IMPORT_COUNT = 500;
 
 const form = document.querySelector("#trip-form");
 const entryPanel = document.querySelector(".entry-panel");
@@ -18,9 +17,6 @@ const emptyTitle = document.querySelector("#empty-title");
 const emptyMessage = document.querySelector("#empty-message");
 const recordCount = document.querySelector("#record-count");
 const cardTemplate = document.querySelector("#trip-card-template");
-const exportButton = document.querySelector("#export-button");
-const importButton = document.querySelector("#import-button");
-const importFile = document.querySelector("#import-file");
 const setupPanel = document.querySelector("#setup-panel");
 const setupMessage = document.querySelector("#setup-message");
 const legacyNotice = document.querySelector("#legacy-notice");
@@ -60,8 +56,6 @@ function setUiEnabled(enabled) {
   form.querySelectorAll("input, button").forEach((control) => {
     control.disabled = !enabled;
   });
-  importButton.disabled = !enabled;
-  exportButton.disabled = !enabled;
 }
 
 function showSetup(message) {
@@ -575,154 +569,6 @@ function handleListClick(event) {
   }
 }
 
-function escapePropertyValue(value) {
-  return String(value)
-    .replace(/\\/g, "\\\\")
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t")
-    .replace(/([=:#!])/g, "\\$1");
-}
-
-function unescapePropertyValue(value) {
-  return value.replace(/\\u([0-9a-fA-F]{4})|\\(.)/g, (_, unicode, escaped) => {
-    if (unicode) return String.fromCharCode(Number.parseInt(unicode, 16));
-    if (escaped === "n") return "\n";
-    if (escaped === "r") return "\r";
-    if (escaped === "t") return "\t";
-    return escaped;
-  });
-}
-
-function serializeProperties() {
-  const lines = [
-    "# Carpool Board shared backup",
-    `# Exported at ${new Date().toISOString()}`,
-    "schema.version=1",
-    `trip.count=${trips.length}`,
-  ];
-
-  trips.forEach((trip, index) => {
-    const exportedTrip = {
-      id: trip.id,
-      driverName: trip.driverName,
-      travelDate: trip.travelDate,
-      origin: trip.origin,
-      waypoints: trip.waypoints,
-      destination: trip.destination,
-      capacity: trip.capacity,
-      remainingSeats: trip.remainingSeats,
-      contact: trip.contact,
-      createdAt: trip.createdAt,
-      expiresAt: trip.expiresAt,
-    };
-    Object.entries(exportedTrip).forEach(([key, value]) => {
-      lines.push(`trip.${index}.${key}=${escapePropertyValue(value)}`);
-    });
-  });
-  return `${lines.join("\n")}\n`;
-}
-
-function parseProperties(text) {
-  const values = new Map();
-
-  text.split(/\r?\n/).forEach((rawLine) => {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#") || line.startsWith("!")) return;
-
-    let separatorIndex = -1;
-    let escaped = false;
-    for (let index = 0; index < line.length; index += 1) {
-      const character = line[index];
-      if (!escaped && (character === "=" || character === ":")) {
-        separatorIndex = index;
-        break;
-      }
-      escaped = !escaped && character === "\\";
-      if (character !== "\\") escaped = false;
-    }
-    if (separatorIndex < 0) return;
-
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim();
-    values.set(key, unescapePropertyValue(value));
-  });
-
-  if (values.get("schema.version") !== "1") throw new Error("不支持的备份版本");
-
-  const count = Number(values.get("trip.count"));
-  if (!Number.isInteger(count) || count < 0 || count > MAX_IMPORT_COUNT) {
-    throw new Error(`备份记录数量应在 0 至 ${MAX_IMPORT_COUNT} 条之间`);
-  }
-
-  const importedTrips = [];
-  for (let index = 0; index < count; index += 1) {
-    const prefix = `trip.${index}.`;
-    const trip = normalizeImportedTrip({
-      id: values.get(`${prefix}id`),
-      driverName: values.get(`${prefix}driverName`),
-      travelDate: values.get(`${prefix}travelDate`),
-      origin: values.get(`${prefix}origin`),
-      waypoints: values.get(`${prefix}waypoints`),
-      destination: values.get(`${prefix}destination`),
-      capacity: Number(values.get(`${prefix}capacity`)),
-      remainingSeats: Number(values.get(`${prefix}remainingSeats`)),
-      contact: values.get(`${prefix}contact`),
-      createdAt: values.get(`${prefix}createdAt`),
-      expiresAt: values.get(`${prefix}expiresAt`),
-    });
-    if (!trip) throw new Error(`第 ${index + 1} 条记录格式无效`);
-    importedTrips.push(trip);
-  }
-  return importedTrips;
-}
-
-function exportProperties() {
-  if (trips.length === 0) {
-    showToast("暂无可导出的行程");
-    return;
-  }
-
-  const blob = new Blob([serializeProperties()], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `carpool-trips-${new Date().toISOString().slice(0, 10)}.properties`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  showToast("共享列表备份已导出");
-}
-
-async function importProperties(file) {
-  importButton.disabled = true;
-  try {
-    const importedTrips = parseProperties(await file.text());
-    const now = Date.now();
-    const activeTrips = importedTrips.filter(
-      (trip) => Date.parse(trip.expiresAt) > now && Date.parse(trip.travelDate) >= now - 60 * 1000,
-    );
-
-    if (activeTrips.length > 0) {
-      const payloads = activeTrips.map((trip) => toDatabasePayload(trip, { preserveDates: true }));
-      const { error } = await client.from("trips").insert(payloads);
-      if (error) throw error;
-      await loadTrips({ silent: true });
-    }
-
-    const ignoredCount = importedTrips.length - activeTrips.length;
-    const ignoredText = ignoredCount > 0 ? `，已忽略 ${ignoredCount} 条过期或已出发行程` : "";
-    showToast(`已共享 ${activeTrips.length} 条记录${ignoredText}`);
-  } catch (error) {
-    console.error("导入 properties 失败：", error);
-    showToast(`导入失败：${friendlyError(error)}`);
-  } finally {
-    importButton.disabled = false;
-    importFile.value = "";
-  }
-}
-
 function showToast(message) {
   window.clearTimeout(toastTimer);
   toast.textContent = message;
@@ -744,12 +590,6 @@ capacityInput.addEventListener("input", () => {
 });
 form.addEventListener("input", clearFieldErrors);
 tripList.addEventListener("click", handleListClick);
-exportButton.addEventListener("click", exportProperties);
-importButton.addEventListener("click", () => importFile.click());
-importFile.addEventListener("change", () => {
-  const [file] = importFile.files;
-  if (file) importProperties(file);
-});
 migrateButton.addEventListener("click", migrateLegacyTrips);
 
 window.setInterval(() => {

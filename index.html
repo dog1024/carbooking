@@ -171,17 +171,6 @@
             </div>
           </div>
 
-          <div class="backup-actions" aria-label="备份操作">
-            <button id="import-button" class="secondary-button" type="button" title="导入 properties 备份">
-              <span aria-hidden="true">↥</span>
-              导入
-            </button>
-            <button id="export-button" class="secondary-button" type="button" title="导出 properties 备份">
-              <span aria-hidden="true">↧</span>
-              导出
-            </button>
-            <input id="import-file" type="file" accept=".properties,text/plain" hidden />
-          </div>
         </div>
 
         <div id="trip-list" class="trip-list" aria-live="polite"></div>
@@ -193,6 +182,23 @@
         </div>
       </section>
     </main>
+
+    <footer class="site-footer">
+      <div class="page-shell disclaimer" aria-labelledby="disclaimer-title">
+        <div class="disclaimer__heading">
+          <span class="disclaimer__mark" aria-hidden="true">i</span>
+          <h2 id="disclaimer-title">免责声明</h2>
+        </div>
+        <div class="disclaimer__content">
+          <p>
+            本网站为非营利的出行信息共享工具，仅用于方便司机与乘客发布、查看和联系出行信息；网站不收取平台服务费，也不参与定价、交易、承运或行程安排。
+          </p>
+          <p>
+            所有信息由用户自行发布，网站不对用户身份、车辆状况、信息真实性或行程安全作保证。联系和乘车前请自行核实信息、遵守当地法律法规，并注意人身、财产和隐私安全。
+          </p>
+        </div>
+      </div>
+    </footer>
 
     <template id="trip-card-template">
       <article class="trip-card">
