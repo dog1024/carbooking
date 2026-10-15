@@ -5,6 +5,9 @@ const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 const form = document.querySelector("#trip-form");
 const entryPanel = document.querySelector(".entry-panel");
+const publishDialog = document.querySelector("#publish-dialog");
+const openPublishButton = document.querySelector("#open-publish");
+const closePublishButton = document.querySelector("#close-publish");
 const submitButton = document.querySelector("#submit-button");
 const resetButton = document.querySelector("#reset-form");
 const travelDateInput = document.querySelector("#travel-date");
@@ -53,9 +56,23 @@ function setConnectionStatus(state, text) {
 function setUiEnabled(enabled) {
   isReady = enabled;
   entryPanel.classList.toggle("is-disabled", !enabled);
+  openPublishButton.disabled = !enabled;
   form.querySelectorAll("input, textarea, button").forEach((control) => {
     control.disabled = !enabled;
   });
+}
+
+function openPublishDialog() {
+  if (!isReady || publishDialog.open) return;
+  clearFieldErrors();
+  updateMinimumTravelDate();
+  setDefaultTravelDate();
+  publishDialog.showModal();
+  window.setTimeout(() => form.elements.driverName.focus(), 0);
+}
+
+function closePublishDialog() {
+  publishDialog.close();
 }
 
 function showSetup(message) {
@@ -549,7 +566,7 @@ async function handleSubmit(event) {
     renderTrips();
     form.reset();
     setDefaultTravelDate();
-    form.elements.driverName.focus();
+    closePublishDialog();
     showToast("行程已共享，将在 7 天后自动隐藏");
   } catch (error) {
     console.error("添加共享行程失败：", error);
@@ -602,6 +619,11 @@ function showToast(message) {
 }
 
 form.addEventListener("submit", handleSubmit);
+openPublishButton.addEventListener("click", openPublishDialog);
+closePublishButton.addEventListener("click", closePublishDialog);
+publishDialog.addEventListener("click", (event) => {
+  if (event.target === publishDialog) closePublishDialog();
+});
 resetButton.addEventListener("click", () => {
   form.reset();
   clearFieldErrors();
