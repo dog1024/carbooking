@@ -11,6 +11,8 @@ create table if not exists public.trips (
   capacity smallint not null check (capacity between 1 and 99),
   remaining_seats smallint not null check (remaining_seats between 0 and capacity),
   contact text not null check (char_length(btrim(contact)) between 1 and 60),
+  fare_amount numeric(10,2) check (fare_amount is null or fare_amount between 0 and 9999),
+  notes text check (notes is null or char_length(notes) <= 300),
   owner_id uuid not null default auth.uid(),
   status text not null default 'active' check (status in ('active', 'expired')),
   created_at timestamptz not null default now(),
@@ -25,6 +27,8 @@ create table if not exists public.trips (
 alter table public.trips add column if not exists origin text;
 alter table public.trips add column if not exists waypoints text;
 alter table public.trips add column if not exists destination text;
+alter table public.trips add column if not exists fare_amount numeric(10,2);
+alter table public.trips add column if not exists notes text;
 alter table public.trips add column if not exists status text not null default 'active';
 alter table public.trips drop constraint if exists trips_owner_id_fkey;
 
@@ -33,6 +37,26 @@ begin
   alter table public.trips
     add constraint trips_origin_check
     check (origin is null or char_length(btrim(origin)) between 1 and 80);
+exception
+  when duplicate_object then null;
+end
+$$;
+
+do $$
+begin
+  alter table public.trips
+    add constraint trips_fare_amount_check
+    check (fare_amount is null or fare_amount between 0 and 9999);
+exception
+  when duplicate_object then null;
+end
+$$;
+
+do $$
+begin
+  alter table public.trips
+    add constraint trips_notes_check
+    check (notes is null or char_length(notes) <= 300);
 exception
   when duplicate_object then null;
 end
@@ -119,6 +143,8 @@ grant insert (
   capacity,
   remaining_seats,
   contact,
+  fare_amount,
+  notes,
   owner_id,
   created_at,
   expires_at

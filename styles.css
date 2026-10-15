@@ -35,7 +35,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -267,8 +268,7 @@ p {
   min-width: 0;
 }
 
-.field--wide,
-.field--contact {
+.field--wide {
   grid-column: 1 / -1;
 }
 
@@ -284,7 +284,8 @@ p {
   font-weight: 500;
 }
 
-.field input {
+.field input,
+.field textarea {
   width: 100%;
   min-width: 0;
   height: 44px;
@@ -297,17 +298,27 @@ p {
   transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 
-.field input:hover {
+.field textarea {
+  min-height: 96px;
+  padding-block: 11px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.field input:hover,
+.field textarea:hover {
   border-color: #9eb1ad;
 }
 
-.field input:focus {
+.field input:focus,
+.field textarea:focus {
   border-color: var(--teal);
   background: #fff;
   box-shadow: 0 0 0 3px rgba(23, 107, 112, 0.12);
 }
 
-.field input[aria-invalid="true"] {
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
   border-color: var(--danger);
   box-shadow: 0 0 0 3px rgba(180, 71, 62, 0.1);
 }
@@ -467,7 +478,7 @@ p {
 
 .trip-card__body {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr) minmax(0, 0.8fr);
   gap: 24px;
   align-items: start;
   margin: 19px 0;
@@ -501,6 +512,14 @@ p {
 
 .contact-value[href]:hover {
   text-decoration: underline;
+}
+
+.fare-value {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
 }
 
 .route-block {
@@ -555,6 +574,26 @@ p {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.trip-notes {
+  margin: 0 0 19px;
+  padding: 13px 15px;
+  border-left: 3px solid #b8ccc6;
+  background: #f8fbfa;
+}
+
+.trip-notes[hidden] {
+  display: none;
+}
+
+.notes-value {
+  margin: 0;
+  color: #405153;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
@@ -615,7 +654,8 @@ p {
 }
 
 button:disabled,
-input:disabled {
+input:disabled,
+textarea:disabled {
   cursor: not-allowed;
 }
 
@@ -796,8 +836,7 @@ input:disabled {
     grid-template-columns: 1fr;
   }
 
-  .field--wide,
-  .field--contact {
+  .field--wide {
     grid-column: auto;
   }
 

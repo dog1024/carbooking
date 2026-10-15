@@ -53,7 +53,7 @@ function setConnectionStatus(state, text) {
 function setUiEnabled(enabled) {
   isReady = enabled;
   entryPanel.classList.toggle("is-disabled", !enabled);
-  form.querySelectorAll("input, button").forEach((control) => {
+  form.querySelectorAll("input, textarea, button").forEach((control) => {
     control.disabled = !enabled;
   });
 }
@@ -144,6 +144,8 @@ function fromDatabaseRow(row) {
     capacity: Number(row.capacity),
     remainingSeats: Number(row.remaining_seats),
     contact: String(row.contact),
+    fareAmount: row.fare_amount === null ? null : Number(row.fare_amount),
+    notes: String(row.notes || ""),
     ownerId: String(row.owner_id),
     createdAt: new Date(row.created_at).toISOString(),
     expiresAt: new Date(row.expires_at).toISOString(),
@@ -160,6 +162,8 @@ function toDatabasePayload(trip, { preserveDates = false } = {}) {
     capacity: trip.capacity,
     remaining_seats: trip.remainingSeats,
     contact: trip.contact,
+    fare_amount: trip.fareAmount,
+    notes: trip.notes || null,
     owner_id: currentUserId,
   };
 
@@ -179,7 +183,7 @@ async function loadTrips({ silent = false } = {}) {
 
   const { data, error } = await client
     .from("trips")
-    .select("id,driver_name,travel_date,origin,waypoints,destination,capacity,remaining_seats,contact,owner_id,created_at,expires_at")
+    .select("id,driver_name,travel_date,origin,waypoints,destination,capacity,remaining_seats,contact,fare_amount,notes,owner_id,created_at,expires_at")
     .order("travel_date", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -260,6 +264,10 @@ function normalizeImportedTrip(trip) {
 
   const capacity = Number(trip.capacity);
   const remainingSeats = Number(trip.remainingSeats);
+  const fareAmount = trip.fareAmount === null || trip.fareAmount === undefined || trip.fareAmount === ""
+    ? null
+    : Number(trip.fareAmount);
+  const notes = typeof trip.notes === "string" ? trip.notes.trim() : "";
   const origin = typeof trip.origin === "string" && trip.origin.trim() ? trip.origin.trim() : "待补充";
   const waypoints = typeof trip.waypoints === "string" ? trip.waypoints.trim() : "";
   const destination =
@@ -280,6 +288,12 @@ function normalizeImportedTrip(trip) {
     origin.length > 80 ||
     waypoints.length > 160 ||
     destination.length > 80 ||
+    (fareAmount !== null &&
+      (!Number.isFinite(fareAmount) ||
+        fareAmount < 0 ||
+        fareAmount > 9999 ||
+        Math.abs(fareAmount * 100 - Math.round(fareAmount * 100)) > Number.EPSILON * 100)) ||
+    notes.length > 300 ||
     !Number.isFinite(createdAt) ||
     !Number.isFinite(travelDate) ||
     !Number.isFinite(expiresAt) ||
@@ -304,6 +318,8 @@ function normalizeImportedTrip(trip) {
     capacity,
     remainingSeats,
     contact: trip.contact.trim(),
+    fareAmount,
+    notes,
     createdAt: new Date(createdAt).toISOString(),
     expiresAt: new Date(expiresAt).toISOString(),
   };
@@ -338,6 +354,12 @@ function contactHref(contact) {
   return /^\+?\d{7,15}$/.test(normalized) ? `tel:${normalized}` : "";
 }
 
+function formatFare(fareAmount) {
+  if (fareAmount === null) return "待确认";
+  if (fareAmount === 0) return "免费";
+  return `¥${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(fareAmount)} / 人`;
+}
+
 function renderTrips() {
   tripList.replaceChildren();
   recordCount.textContent = `${trips.length} 条`;
@@ -362,6 +384,7 @@ function renderTrips() {
     const increaseButton = card.querySelector(".increase-button");
     const stepper = card.querySelector(".stepper");
     const readOnlyLabel = card.querySelector(".read-only-label");
+    const notesBlock = card.querySelector(".trip-notes");
     const isOwner = trip.ownerId === currentUserId;
 
     card.dataset.id = trip.id;
@@ -376,6 +399,12 @@ function renderTrips() {
     card.querySelector(".waypoints-value").textContent = trip.waypoints || "无";
     card.querySelector(".destination-value").textContent = trip.destination;
     contactLink.textContent = trip.contact;
+    card.querySelector(".fare-value").textContent = formatFare(trip.fareAmount);
+
+    if (trip.notes) {
+      card.querySelector(".notes-value").textContent = trip.notes;
+      notesBlock.hidden = false;
+    }
 
     const href = contactHref(trip.contact);
     if (href) contactLink.href = href;
@@ -435,6 +464,9 @@ function readAndValidateForm() {
   const capacity = Number(formData.get("capacity"));
   const remainingSeats = Number(formData.get("remainingSeats"));
   const contact = String(formData.get("contact") || "").trim();
+  const fareAmountText = String(formData.get("fareAmount") || "").trim();
+  const fareAmount = Number(fareAmountText);
+  const notes = String(formData.get("notes") || "").trim();
 
   if (!driverName) {
     showFormError("请填写司机称呼", form.elements.driverName);
@@ -468,6 +500,18 @@ function readAndValidateForm() {
     showFormError("请填写联系方式", form.elements.contact);
     return null;
   }
+  if (!fareAmountText) {
+    showFormError("请填写乘车费用，免费请输入 0", form.elements.fareAmount);
+    return null;
+  }
+  if (!/^\d+(?:\.\d{1,2})?$/.test(fareAmountText) || !Number.isFinite(fareAmount) || fareAmount > 9999) {
+    showFormError("乘车费用应为 0 至 9999，最多保留两位小数", form.elements.fareAmount);
+    return null;
+  }
+  if (notes.length > 300) {
+    showFormError("备注不能超过 300 字", form.elements.notes);
+    return null;
+  }
 
   return {
     driverName,
@@ -478,6 +522,8 @@ function readAndValidateForm() {
     capacity,
     remainingSeats,
     contact,
+    fareAmount,
+    notes,
   };
 }
 
@@ -494,7 +540,7 @@ async function handleSubmit(event) {
     const { data, error } = await client
       .from("trips")
       .insert(toDatabasePayload(trip))
-      .select("id,driver_name,travel_date,origin,waypoints,destination,capacity,remaining_seats,contact,owner_id,created_at,expires_at")
+      .select("id,driver_name,travel_date,origin,waypoints,destination,capacity,remaining_seats,contact,fare_amount,notes,owner_id,created_at,expires_at")
       .single();
     if (error) throw error;
 

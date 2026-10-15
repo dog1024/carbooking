@@ -137,7 +137,7 @@
               />
             </label>
 
-            <label class="field field--contact">
+            <label class="field">
               <span>联系方式</span>
               <input
                 id="contact"
@@ -148,6 +148,32 @@
                 placeholder="手机号或微信号"
                 required
               />
+            </label>
+
+            <label class="field">
+              <span>乘车费用 <small>元/人，0 表示免费</small></span>
+              <input
+                id="fare-amount"
+                name="fareAmount"
+                type="number"
+                min="0"
+                max="9999"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="例如：20"
+                required
+              />
+            </label>
+
+            <label class="field field--wide">
+              <span>备注 <small>选填，最多 300 字</small></span>
+              <textarea
+                id="notes"
+                name="notes"
+                maxlength="300"
+                rows="4"
+                placeholder="例如：可携带行李、集合说明等"
+              ></textarea>
             </label>
           </div>
 
@@ -225,6 +251,10 @@
             <p class="card-label">联系方式</p>
             <a class="contact-value"></a>
           </div>
+          <div>
+            <p class="card-label">乘车费用</p>
+            <p class="fare-value"></p>
+          </div>
         </div>
 
         <div class="route-block" aria-label="行程路线">
@@ -249,6 +279,11 @@
               <p class="route-value destination-value"></p>
             </div>
           </div>
+        </div>
+
+        <div class="trip-notes" hidden>
+          <p class="card-label">备注</p>
+          <p class="notes-value"></p>
         </div>
 
         <div class="seat-control">
